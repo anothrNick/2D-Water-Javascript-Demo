@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="eng">
+	<head>
+		<title>2D Water Effects</title>
+		<!-- standard links -->
+		<link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.min.css">
+		<link rel="stylesheet" type="text/css" href="css/style.css">
+		<script language="javascript" type="text/javascript" src="js/script.js"></script>
+		<script language="javascript" type="text/javascript" src="js/jquery-1.8.3.js"></script>
+	</head>
+	
+	<style>
+		#myCanvas{
+			position:absolute;
+			height:100%;
+			width:100%;
+		}
+	</style>
+	<body>
+		<canvas id="myCanvas"></canvas>
+		<script>
+		
+			/*
+				implemented from Michael Hoffman's XNA demo:
+					http://gamedevelopment.tutsplus.com/tutorials/make-a-splash-with-dynamic-2d-water-effects--gamedev-236
+			*/
+		
+			//get dimensions for full screeen canvvas
+			var dimension = [document.documentElement.clientWidth, document.documentElement.clientHeight];
+			var canvas = document.getElementById("myCanvas");
+			canvas.width = dimension[0];
+			canvas.height = dimension[1];
+			var context = canvas.getContext('2d');
+			
+			//array of springs / columns for water
+			var springs = [];
+			
+			//water column every <x> pixels
+			var WAVE_FREQ = 5;
+			
+			//get wave count needed for screen width
+			var WAVE_COUNT = canvas.width / WAVE_FREQ + 1;
+			
+			//surface of water
+			var START_Y = canvas.height / 1.75;
+			//the depths
+			var END_Y = canvas.height;
+			
+			//start height
+			var HEIGHT = END_Y - START_Y;
+			
+			/*VARIABLES TO TWEAK*/
+			//spring constant
+			var K = 0.035;
+			//how fast waves spread 0 - 0.5
+			var SPREAD = .2;
+			//dampening factor
+			var DAMP = .004;
+			/*tension of spring*/
+			var TENSION = .005;
+			/*speed*/
+			var SPEED = 0;
+			
+			//listen for mouse click
+			canvas.addEventListener("mousedown", getPosition, false);
+			//creaate splash on mouse click
+			function getPosition(event)
+			{
+				var x = event.x;
+				var y = event.y;
+				
+				if(x > 0)
+					x = (Math.ceil(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
+				else if( x < 0)
+					x = (Math.floor(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
+				else
+					x = x;
+
+				splash(x, 100);
+			}
+			
+			//ANIMATION
+			window.requestAnimFrame = (function(callback) {
+				return window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame ||
+				function(callback) {
+					window.setTimeout(callback, 1000 / 60);
+				};
+			})();
+			
+			/*main loop for animation*/
+			function animate()
+			{
+				context.clearRect(0, 0, canvas.width, canvas.height);
+				
+				update();
+				draw();
+				
+				requestAnimFrame(function(){
+					animate();
+				});
+			}
+			
+			//initialize springs
+			function init()
+			{
+				for(var i = 0; i < WAVE_COUNT; i++)
+				{
+					var nw = {};
+					nw.x = i*WAVE_FREQ;
+					nw.speed = SPEED;
+					nw.height = HEIGHT;
+					nw.update = function(){
+						var x = HEIGHT - this.height;
+						this.speed += TENSION * x - this.speed * DAMP;
+						this.height += this.speed;
+					};
+					
+					springs[i] = nw;
+				}
+				
+				animate();
+			}
+			
+			//update things
+			function update()
+			{
+				//first, update the springs
+				updateSprings();
+				//then update other stuff
+			}
+			
+			//draw to canvas
+			function draw()
+			{
+				for(var i = 0; i < springs.length; i++)
+				{
+					if(i != springs.length-1)
+					{
+						connectSprings(springs[i], springs[i+1]);
+					}
+				}
+				//draw other stuff now
+			}
+			
+			//trigger a splash at this x coordinate with this speed
+			function splash(index, sp)
+			{
+				if(index >= 0 && index < springs.length)
+					springs[index].speed = sp;
+			}
+			
+			//update the springs/water
+			function updateSprings()
+			{
+				//update springs
+				for (var i = 0; i < springs.length; i++)
+					springs[i].update();
+					
+				var leftDeltas = [];
+				var rightDeltas = [];
+				
+				//go through and update springs based off of their siblings
+				leftDeltas.length = springs.length;
+				rightDeltas.length = springs.length;
+				// do some passes where springs pull on their neighbours
+				for (var j = 0; j < 8; j++)
+				{
+					//create arrays for springs to the left and right of each spring/column
+					for (var i = 0; i < springs.length; i++)
+					{
+						if (i > 0)
+						{
+							leftDeltas[i] = SPREAD * (springs[i].height - springs[i - 1].height);
+							springs[i - 1].speed += leftDeltas[i];
+						}
+						if (i < springs.length - 1)
+						{
+							rightDeltas[i] = SPREAD * (springs[i].height - springs[i + 1].height);
+							springs[i + 1].speed += rightDeltas[i];
+						}
+					}
+				 
+					//update the position of each spring/column based on the sibling/delta arrays
+					for (var i = 0; i < springs.length; i++)
+					{
+						if (i > 0)
+							springs[i - 1].height += leftDeltas[i];
+						if (i < springs.length - 1)
+							springs[i + 1].height += rightDeltas[i];
+					}
+				}
+			}
+			
+			/* //OLD
+			function drawLine(vLine)
+			{
+				context.beginPath();
+				context.moveTo(vLine.x, vLine.height);
+				context.lineTo(vLine.x, END_Y);
+				context.strokeStyle = '#000';
+				context.stroke();
+				
+				//drawCircle(vLine.x, vLine.height, 1);
+			}
+			
+			function drawCircle(x,y,r,color)
+			{
+				context.beginPath();
+				context.arc(x, y, r, 0, 2 * Math.PI, false);
+				context.fillStyle = 'blue';
+				context.fill();
+				context.lineWidth = 1;
+				context.strokeStyle = '#0000FF';
+				context.stroke();
+			}
+			*/
+			
+			//for each spring(lines) fill as a trapezoid
+			function connectSprings(vOne, vTwo)
+			{
+				//water gradient
+				var randBlue = "217";
+				var col1 = 'hsl(' + randBlue + ', 80%, 72%)';
+				var col2 = 'hsl(' + randBlue + ', 70%, 35%)';
+				var col3 = 'hsl(' + randBlue + ', 60%, 25%)';
+				var col4 = 'hsl(' + randBlue + ', 60%, 10%)';
+				var grd=context.createLinearGradient(0,vOne.height,0,END_Y);
+				grd.addColorStop(0,col1);
+				grd.addColorStop(.30,col2);
+				grd.addColorStop(.5,col3);
+				grd.addColorStop(1,col4);
+				
+				//fill water area
+				context.fillStyle = grd;
+				context.beginPath();
+				context.moveTo(vOne.x, vOne.height);
+				context.lineTo(vTwo.x, vTwo.height);
+				context.lineTo(vTwo.x, END_Y);
+				context.lineTo(vOne.x, END_Y);
+				context.lineTo(vOne.x, vOne.height);
+				context.closePath();
+				context.fill();
+				//context.strokeStyle = '#0000FF';
+				//context.stroke();
+			}
+			
+			//begin
+			init();
+		</script>
+	</body>
+	
+</html>
