@@ -32,12 +32,10 @@
 			canvas.height = dimension[1];
 			var context = canvas.getContext('2d');
 			
-			//array of springs / columns for water
-			var springs = [];
-			
 			//water column every <x> pixels
 			var WAVE_FREQ = 5;
 			
+			var WAV_PASS = 6;
 			//get wave count needed for screen width
 			var WAVE_COUNT = canvas.width / WAVE_FREQ + 1;
 			
@@ -51,34 +49,56 @@
 			
 			/*VARIABLES TO TWEAK*/
 			//spring constant
-			var K = 0.035;
+			var K = 0.05;
 			//how fast waves spread 0 - 0.5
 			var SPREAD = .2;
 			//dampening factor
-			var DAMP = .004;
+			var DAMP = .005;
 			/*tension of spring*/
-			var TENSION = .005;
+			var TENSION = .01;
 			/*speed*/
 			var SPEED = 0;
 			
-			//listen for mouse click
-			canvas.addEventListener("mousedown", getPosition, false);
-			//creaate splash on mouse click
-			function getPosition(event)
-			{
-				var x = event.x;
-				var y = event.y;
-				
-				if(x > 0)
-					x = (Math.ceil(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
-				else if( x < 0)
-					x = (Math.floor(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
-				else
-					x = x;
-
-				splash(x, 100);
+			var rock_source = "rock.png";
+			var stanrock = new Image();
+			stanrock.src = rock_source;
+			
+			var ROCK_WIDTH = '';
+			var ROCK_HEIGHT = '';
+			
+			var Rock = function(x,y){
+				this.rock = stanrock;
+				this.vx = 0;
+				this.vy = 8;
+				this.speed = 1;
+				this.minvy = 4;
+				this.maxvy = 18;
+				this.splashed = false;
+				this.x = x - (stanrock.width/2);
+				this.y = y - (stanrock.height/2);
 			}
 			
+			var Particle = function(x,y,vx,vy){
+				this.x = x;
+				this.y = y;
+				this.vx = vx;
+				this.vy = vy;
+				this.gy = .5;
+				this.r = 4;
+				this.color = "#1c6ba0";
+			}
+			
+			//array of springs / columns for water
+			var springs = [];
+			var rocks = [];
+			var particles = [];
+			
+			//listen for mouse click
+			canvas.addEventListener("mousedown", getPosition, false);
+			
+			/********************
+				ANIMATION LOOP
+			*********************/
 			//ANIMATION
 			window.requestAnimFrame = (function(callback) {
 				return window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame ||
@@ -100,57 +120,45 @@
 				});
 			}
 			
-			//initialize springs
-			function init()
-			{
-				for(var i = 0; i < WAVE_COUNT; i++)
-				{
-					var nw = {};
-					nw.x = i*WAVE_FREQ;
-					nw.speed = SPEED;
-					nw.height = HEIGHT;
-					nw.update = function(){
-						var x = HEIGHT - this.height;
-						this.speed += TENSION * x - this.speed * DAMP;
-						this.height += this.speed;
-					};
-					
-					springs[i] = nw;
-				}
-				
-				animate();
-			}
-			
 			//update things
 			function update()
 			{
-				//first, update the springs
-				updateSprings();
-				//then update other stuff
+				updateWater();
+				updateRocks();
+				updateParticles();
+				
+				collide();
 			}
 			
 			//draw to canvas
 			function draw()
-			{
-				for(var i = 0; i < springs.length; i++)
+			{				
+				drawRocks();
+				drawWater();
+				drawParticles();
+			}
+			
+			/***********
+				UPDATE
+			************/
+			//update water droplets/particles
+			function updateParticles()
+			{		
+				for(var i = 0; i < particles.length; i++)
 				{
-					if(i != springs.length-1)
+					var thisDrop = particles[i];
+					thisDrop.x += thisDrop.vx;
+					thisDrop.y += thisDrop.vy; 
+					thisDrop.vy += thisDrop.gy;
+					
+					if(thisDrop.y > canvas.height + 200)
 					{
-						connectSprings(springs[i], springs[i+1]);
+						particles.splice(i,1);
 					}
 				}
-				//draw other stuff now
-			}
-			
-			//trigger a splash at this x coordinate with this speed
-			function splash(index, sp)
-			{
-				if(index >= 0 && index < springs.length)
-					springs[index].speed = sp;
-			}
-			
+			}			
 			//update the springs/water
-			function updateSprings()
+			function updateWater()
 			{
 				//update springs
 				for (var i = 0; i < springs.length; i++)
@@ -163,7 +171,7 @@
 				leftDeltas.length = springs.length;
 				rightDeltas.length = springs.length;
 				// do some passes where springs pull on their neighbours
-				for (var j = 0; j < 8; j++)
+				for (var j = 0; j < WAV_PASS; j++)
 				{
 					//create arrays for springs to the left and right of each spring/column
 					for (var i = 0; i < springs.length; i++)
@@ -191,44 +199,78 @@
 				}
 			}
 			
-			/* //OLD
-			function drawLine(vLine)
+			function updateRocks()
 			{
-				context.beginPath();
-				context.moveTo(vLine.x, vLine.height);
-				context.lineTo(vLine.x, END_Y);
-				context.strokeStyle = '#000';
-				context.stroke();
-				
-				//drawCircle(vLine.x, vLine.height, 1);
+				for(var i = 0; i < rocks.length; i++)
+				{
+					var thisRock = rocks[i];
+					thisRock.x += thisRock.vx;
+					thisRock.y += thisRock.vy;
+					thisRock.vy += thisRock.speed;
+					
+					if(thisRock.y > canvas.height + 200)
+					{
+						rocks.splice(i,1);
+					}
+					else
+					{
+						if(thisRock.vy > thisRock.maxvy) thisRock.vy = thisRock.maxvy;
+						else if(thisRock.vy < thisRock.minvy) thisRock.vy = thisRock.minvy;
+					}
+				}
 			}
-			
-			function drawCircle(x,y,r,color)
+
+			/******************
+				DRAW
+			*******************/	
+			//draw existing water droplet particles
+			function drawParticles()
 			{
-				context.beginPath();
-				context.arc(x, y, r, 0, 2 * Math.PI, false);
-				context.fillStyle = 'blue';
-				context.fill();
-				context.lineWidth = 1;
-				context.strokeStyle = '#0000FF';
-				context.stroke();
+				for(var i = 0; i < particles.length; i++)
+				{
+					var thisDrop = particles[i];
+					context.beginPath();
+					context.arc(thisDrop.x, thisDrop.y, thisDrop.r, 0, 2 * Math.PI, false);
+					context.fillStyle = thisDrop.color;
+					context.fill();
+				}
 			}
-			*/
-			
+			//draw rocks from array
+			function drawRocks()
+			{
+				for(var i = 0; i < rocks.length; i++)
+				{
+					var thisRock = rocks[i];
+					context.drawImage(thisRock.rock, thisRock.x, thisRock.y);
+				}
+			}
+			//draw water/columns/springs 
+			function drawWater()
+			{
+				for(var i = 0; i < springs.length; i++)
+				{
+					if(i != springs.length-1)
+					{
+						connectSprings(springs[i], springs[i+1]);
+					}
+				}
+			}		
 			//for each spring(lines) fill as a trapezoid
 			function connectSprings(vOne, vTwo)
 			{
 				//water gradient
 				var randBlue = "217";
-				var col1 = 'hsl(' + randBlue + ', 80%, 72%)';
-				var col2 = 'hsl(' + randBlue + ', 70%, 35%)';
-				var col3 = 'hsl(' + randBlue + ', 60%, 25%)';
-				var col4 = 'hsl(' + randBlue + ', 60%, 10%)';
+				var opacity = 0.55; //55% visible
+
+				var col1 = 'rgba(28,107,160,.75)';
+				var col2 = 'rgba(20,80,120,.80)';
+				var col3 = 'rgba(15,60,90,.85)';
+				var col4 = 'rgba(6, 23, 37, .98)';
 				var grd=context.createLinearGradient(0,vOne.height,0,END_Y);
 				grd.addColorStop(0,col1);
 				grd.addColorStop(.30,col2);
 				grd.addColorStop(.5,col3);
-				grd.addColorStop(1,col4);
+				grd.addColorStop(.96,col4);
 				
 				//fill water area
 				context.fillStyle = grd;
@@ -244,6 +286,121 @@
 				//context.stroke();
 			}
 			
+			/*******************
+				MISCELLANEOUS
+			********************/
+			//trigger a splash at this x coordinate with this speed
+			function splash(index, sp)
+			{
+				if(index >= 0 && index < springs.length){
+					springs[index].speed = sp;
+					
+					createSplashParticles(index, sp);
+				}
+			}
+			//create particles at splash location
+			function createSplashParticles(x, speed)
+			{
+				var y = springs[x].height + stanrock.height/3;
+				x = x * WAVE_FREQ;
+				if(speed > 60)
+				{
+					for (var i = 0; i < speed / 4; i++)
+					{
+						var rvx = Math.floor(Math.random() * (Math.PI*2)) - Math.PI;
+						var rvy = -Math.floor(Math.random() * Math.sqrt(speed) * 1.2);
+						console.log(rvx);
+						console.log(rvy);
+						var newDrop = new Particle(Math.floor(Math.random() * 20) + x,y,rvx,rvy);
+						particles[particles.length] = newDrop;
+					}
+				}
+			}	
+			//creaate splash on mouse click
+			function getPosition(event)
+			{
+				var x = event.x;
+				var y = event.y;
+				
+				var arock = new Rock(x,y);
+				rocks[rocks.length] = arock;
+			}
+			//x coord of closest water column/spring
+			function getRealX(x)
+			{
+				if(x > 0)
+					x = (Math.ceil(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
+				else if( x < 0)
+					x = (Math.floor(x/WAVE_FREQ) * WAVE_FREQ)/WAVE_FREQ;
+				else
+					x = x;
+
+				return x;
+			}
+			
+			/**************
+				COLLISION
+			***************/
+			function collide()
+			{
+				for(var i = 0; i < rocks.length; i++)
+				{
+					var thisRock = rocks[i];
+					var realx = getRealX(thisRock.x + thisRock.rock.width/2);
+					
+					var thisSpring = springs[realx];
+					
+					if(thisRock.splashed == false)
+					{
+						if((thisSpring.height <= thisRock.y + thisRock.vy) &&
+							(thisSpring.height >= thisRock.y - thisRock.vy))
+						{
+							thisRock.splashed = true;
+							thisRock.speed = -.5;
+							splash(realx, Math.pow(thisRock.vy,2)/2);
+						}
+					}
+				}
+				
+				for(var i = 0; i < particles.length; i++)
+				{
+					var thisDrop = particles[i];
+					var realx = getRealX(thisDrop.x);
+					
+					var thisSpring = springs[realx];
+					if(thisSpring)
+					{
+						if(thisSpring.height <= thisDrop.y)
+						{
+							particles.splice(i,1);
+						}
+					}
+				}
+			}
+			
+			/*****************
+				INITIALIZE
+			******************/
+			//initialize springs
+			function init()
+			{
+				for(var i = 0; i < WAVE_COUNT; i++)
+				{
+					var nw = {};
+					nw.x = i*WAVE_FREQ;
+					nw.speed = SPEED;
+					nw.height = HEIGHT;
+					nw.update = function(){
+						var x = HEIGHT - this.height;
+						this.speed += TENSION * x - this.speed * DAMP;
+						this.height += this.speed;
+					};
+					
+					springs[i] = nw;
+				}
+				
+				animate();
+			}
 			//begin
 			init();
 		</script>
