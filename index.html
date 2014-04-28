@@ -415,7 +415,8 @@
 					
 					var thisSpring = springs[realx];
 					
-					if(thisRock.splashed == false)
+					
+					if(thisRock && thisRock.splashed == false)
 					{
 						if((thisSpring.height <= thisRock.y + thisRock.vy) &&
 							(thisSpring.height >= thisRock.y - thisRock.vy))
