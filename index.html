@@ -32,6 +32,14 @@
 			canvas.height = dimension[1];
 			var context = canvas.getContext('2d');
 			
+			var tempCanvas = document.createElement("canvas");
+			tempCanvas.width = dimension[0];
+			tempCanvas.height = dimension[1];
+			var tempCtx = tempCanvas.getContext("2d");
+			
+			var cwidth = canvas.width;
+			var cheight = canvas.height;
+			
 			//water column every <x> pixels
 			var WAVE_FREQ = 5;
 			
@@ -83,13 +91,13 @@
 				this.y = y - (stanrock.height/2);
 			}
 			
-			var Particle = function(x,y,vx,vy){
+			var Particle = function(r,x,y,vx,vy){
 				this.x = x;
 				this.y = y;
 				this.vx = vx;
 				this.vy = vy;
 				this.gy = .5;
-				this.r = 4;
+				this.r = r;
 				this.color = "#1c6ba0";
 				this.drop = standrop;
 			}
@@ -139,9 +147,9 @@
 			//draw to canvas
 			function draw()
 			{				
+				drawParticles();
 				drawRocks();
 				drawWater();
-				drawParticles();
 			}
 			
 			/***********
@@ -233,6 +241,7 @@
 			//draw existing water droplet particles
 			function drawParticles()
 			{
+				//tempCtx.clearRect(0,0,cwidth,cheight);
 				for(var i = 0; i < particles.length; i++)
 				{
 					var thisDrop = particles[i];
@@ -240,20 +249,56 @@
 					
 					var ph = thisDrop.drop.height;
 					var pw = thisDrop.drop.width;
-					
+
+					//with droplet image
 					context.save();
 					context.translate(thisDrop.x, thisDrop.y);
 					context.rotate(-Math.atan2(thisDrop.vx, thisDrop.vy));
 					context.drawImage(thisDrop.drop, 0, 0, pw, ph, -pw/2, -ph/2, pw, ph);
 					context.restore();
+
+					
 					/*
+					//just a particle
 					context.beginPath();
 					context.arc(thisDrop.x, thisDrop.y, thisDrop.r, 0, 2 * Math.PI, false);
 					context.fillStyle = thisDrop.color;
 					context.fill();
 					*/
+					
+					/*
+					//meta balls
+					tempCtx.beginPath();
+					var grad = tempCtx.createRadialGradient(thisDrop.x, thisDrop.y, 1, thisDrop.x, thisDrop.y, thisDrop.r*2);
+					grad.addColorStop(0, 'rgba(28,107,160,1)');
+					grad.addColorStop(.8, 'rgba(28,107,160,0)');
+					tempCtx.fillStyle = grad;
+					tempCtx.arc(thisDrop.x, thisDrop.y, thisDrop.r*2, 0, Math.PI*2);
+					tempCtx.fill();
+					*/
 				}
+				
+				//if(particles.length > 0)
+				//	meta();
 			}
+			
+			function meta()
+			{
+				var imageData = tempCtx.getImageData(0,0,cwidth,cheight);
+				var pix = imageData.data;
+				var threshold = 205;
+				
+				for (var i = 0, n = pix.length; i <n; i += 4) {
+					if(pix[i+3]<threshold){
+					   pix[i+3]/=6;
+						if(pix[i+3]>threshold/4){
+							pix[i+3]=0;
+						}
+					}
+				}
+				context.putImageData(imageData, 0, 0);    
+			}
+			
 			//draw rocks from array
 			function drawRocks()
 			{
@@ -324,13 +369,14 @@
 				x = x * WAVE_FREQ;
 				if(speed > 60)
 				{
-					for (var i = 0; i < speed / 4; i++)
+					for (var i = 0; i < speed/4; i++)
 					{
 						var rvx = Math.floor(Math.random() * (10)) - Math.PI;
 						var rvy = -Math.floor(Math.random() * Math.sqrt(speed) * 1.2);
+						var rr = Math.random() * 25;
 						console.log(rvx);
 						console.log(rvy);
-						var newDrop = new Particle(Math.floor(Math.random() * 20) + x,y,rvx,rvy);
+						var newDrop = new Particle(rr, Math.floor(Math.random() * 20) + x,y,rvx,rvy);
 						particles[particles.length] = newDrop;
 					}
 				}
